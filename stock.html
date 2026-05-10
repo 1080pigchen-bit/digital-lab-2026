@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chong Family Terminal | 2026 Final</title>
+    <title>宜辰家庭終端 v3.0 | 全功能整合版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background: #050505; color: #e4e4e7; font-family: 'Segoe UI', sans-serif; height: 100vh; overflow: hidden; }
         .sidebar { background: #09090b; border-right: 1px solid #18181b; }
         .stock-item { transition: 0.2s; border: 1px solid transparent; }
         .stock-item.active { background: #10b98115; border-color: #10b98150; }
-        .nav-tab { cursor: pointer; border-bottom: 2px solid transparent; }
+        .nav-tab { cursor: pointer; border-bottom: 2px solid transparent; transition: 0.3s; }
         .nav-tab.active { border-bottom-color: #10b981; color: #10b981; }
         .score-bar { height: 4px; background: #1a1a1a; border-radius: 2px; overflow: hidden; width: 35px; }
         ::-webkit-scrollbar { width: 4px; }
@@ -34,11 +34,11 @@
 
             <div id="stock-list-container" class="flex-1 overflow-y-auto p-2">
                 <div id="category-list" class="space-y-6">
-                    <div class="p-6 text-zinc-600 text-[10px] uppercase tracking-widest italic animate-pulse text-center">Syncing Live Data...</div>
+                    <div class="p-6 text-zinc-600 text-[10px] uppercase tracking-widest italic animate-pulse text-center">Data Stream Initializing...</div>
                 </div>
             </div>
             
-            <div id="video-info-container" class="hidden p-6 text-[10px] text-zinc-500 italic">Streaming: 游庭皓的財經皓角</div>
+            <div id="video-info-container" class="hidden p-6 text-[10px] text-zinc-500 italic">Connected: 游庭皓的財經皓角</div>
         </aside>
 
         <main class="flex-1 flex flex-col bg-black overflow-hidden relative">
@@ -59,10 +59,10 @@
             <div class="p-8 border-t border-zinc-900 bg-zinc-950/90 backdrop-blur-md">
                 <div class="flex items-center gap-3 mb-2">
                     <span class="px-2 py-0.5 bg-emerald-500 text-black text-[9px] font-black rounded uppercase tracking-tighter">Family Guide</span>
-                    <h2 class="text-xl font-black text-white uppercase tracking-tight" id="desc-name">Monitor</h2>
+                    <h2 class="text-xl font-black text-white uppercase tracking-tight" id="desc-name">Market Monitor</h2>
                     <span id="desc-emoji" class="text-2xl">📡</span>
                 </div>
-                <p class="text-zinc-400 text-xs leading-relaxed max-w-3xl" id="desc-content">點擊左側標的查看白話文產業分析與評分等級。</p>
+                <p class="text-zinc-400 text-xs leading-relaxed max-w-3xl" id="desc-content">請點擊左側標的查看白話文產業分析與評分等級。</p>
             </div>
         </main>
     </div>
@@ -70,7 +70,7 @@
     <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
     <script>
         // --- 設定區 ---
-        // 請在此處貼上你的 Google Sheet CSV 連結
+        // 請在此處貼上你的 Google Sheet CSV 發佈連結
         const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT-0898ngmOYQTTIgoXmw7pk6z1jucOzNpT2N4jiO0FXh6SXIGyNTAc8iCG1Q3St0oCbsvkTXWxtU2R/pub?output=csv"; 
         
         const YT_CHANNEL_ID = "UC0lbAQVpenvfA2QqzsRtL_g";
@@ -79,7 +79,8 @@
             "TSM": "全球最強的晶片工廠（台積電）。掌握全人類科技進步的鑰匙。", 
             "AAPL": "蘋果公司。強大的產品生態系，讓用戶黏著度極高。", 
             "COST": "好市多。靠高品質與會員制建立的穩定零售霸主。", 
-            "MP": "稀土資源龍頭。生產電動車與高端手機必備的關鍵礦產。"
+            "MP": "稀土資源龍頭。生產電動車與高端手機必備的關鍵礦產。",
+            "AMZN": "全世界最大的電商與雲端服務提供者，掌握全球網購脈絡。"
         };
 
         let currentSymbol = "";
@@ -100,12 +101,11 @@
                 const lines = csvText.split(/\r?\n/);
                 const header = lines[0].split(',');
                 
-                // 尋找欄位索引
                 const idxTicker = header.findIndex(h => h.trim() === 'Ticker');
                 const idxScore = header.findIndex(h => h.trim() === 'YiChenScore');
                 const idxCat = header.findIndex(h => h.trim() === 'Category');
 
-                if (idxTicker === -1 || idxScore === -1 || idxCat === -1) throw new Error("Format Error");
+                if (idxTicker === -1 || idxScore === -1 || idxCat === -1) throw new Error("Header Error");
 
                 const rows = lines.slice(1);
                 const dataByCat = {};
@@ -123,7 +123,7 @@
 
                 renderList(dataByCat);
             } catch (e) {
-                container.innerHTML = `<div class="p-6 text-red-500 text-[11px] leading-relaxed font-bold uppercase">Sync Failed: Check CSV URL & Headers</div>`;
+                container.innerHTML = `<div class="p-6 text-red-500 text-[10px] font-bold uppercase">Sync Failed: Check CSV Link & Headers</div>`;
             }
         }
 
@@ -139,7 +139,7 @@
                 sorted.forEach(item => {
                     let btn = document.createElement('div');
                     btn.className = `stock-item px-4 py-3 rounded-lg flex justify-between items-center cursor-pointer ${item.sym === currentSymbol ? 'active' : ''}`;
-                    btn.innerHTML = `<div class="flex items-center gap-2"><span class="text-xs font-bold font-mono text-zinc-300">${item.sym}</span><span class="text-[13px]">${item.grade}</span></div><div class="flex items-center gap-2"><div class="score-bar"><div class="h-full bg-emerald-500" style="width:${Math.min(item.score, 100)}%"></div></div><span class="text-[10px] text-emerald-500 font-mono font-bold">${Math.round(item.score)}</span></div>`;
+                    btn.innerHTML = `<div class="flex items-center gap-2"><span class="text-xs font-bold font-mono text-zinc-300">${item.sym}</span><span>${item.grade}</span></div><div class="flex items-center gap-2"><div class="score-bar"><div class="h-full bg-emerald-500" style="width:${Math.min(item.score, 100)}%"></div></div><span class="text-[10px] text-emerald-500 font-mono font-bold">${Math.round(item.score)}</span></div>`;
                     btn.onclick = () => switchSymbol(item.sym, item.fullTicker, item.grade);
                     grid.appendChild(btn);
                 });
@@ -147,10 +147,27 @@
                 container.appendChild(section);
             }
             if(!currentSymbol) {
-            const firstCat = Object.keys(dataByCat)[0];
-            if (firstCat && dataByCat[firstCat][0]) {
-                const f = dataByCat[firstCat][0];
-                switchSymbol(f.sym, f.fullTicker, f.grade);
+                const cats = Object.keys(dataByCat);
+                if(cats.length > 0 && dataByCat[cats[0]].length > 0) {
+                    const f = dataByCat[cats[0]][0];
+                    switchSymbol(f.sym, f.fullTicker, f.grade);
+                }
             }
         }
-    } // 這是對應 renderList 的結束大括號
+
+        function switchSymbol(sym, fullTicker, grade) {
+            currentSymbol = sym;
+            document.querySelectorAll('.stock-item').forEach(el => el.classList.toggle('active', el.querySelector('span').innerText === sym));
+            document.getElementById('desc-name').innerText = sym;
+            document.getElementById('desc-emoji').innerText = grade;
+            document.getElementById('desc-content').innerText = LIFE_DESC[sym] || "該標的具備實體產業核心技術，正透過其全球佈局影響未來趨勢。";
+            
+            document.getElementById('tv-overview-widget').innerHTML = "";
+            const s = document.createElement('script'); s.src = "https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js"; s.async=true;
+            s.innerHTML = JSON.stringify({ "symbols": [[`${fullTicker}|1D`]], "chartOnly": false, "width": "100%", "height": "100%", "locale": "zh_TW", "colorTheme": "dark", "lineColor": "#10b981", "topColor": "rgba(16, 185, 129, 0.12)", "bottomColor": "rgba(16, 185, 129, 0)", "autosize": true });
+            document.getElementById('tv-overview-widget').appendChild(s);
+            fetchNews(sym);
+        }
+
+        async function fetchNews(sym) {
+            try

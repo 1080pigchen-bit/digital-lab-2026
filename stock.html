@@ -146,4 +146,11 @@
                 section.appendChild(grid);
                 container.appendChild(section);
             }
-            if
+            if(!currentSymbol) {
+            const firstCat = Object.keys(dataByCat)[0];
+            if (firstCat && dataByCat[firstCat][0]) {
+                const f = dataByCat[firstCat][0];
+                switchSymbol(f.sym, f.fullTicker, f.grade);
+            }
+        }
+    } // 這是對應 renderList 的結束大括號

@@ -170,4 +170,52 @@
         }
 
         async function fetchNews(sym) {
-            try
+            try {
+                const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://news.google.com/rss/search?q='+sym+'+stock&hl=zh-TW&gl=TW&ceid=TW:zh-Hant')}`);
+                const data = await res.json();
+                document.getElementById('news-feed').innerHTML = data.items.slice(0, 3).map(i => `<div class="p-4 border border-zinc-900 rounded bg-zinc-950/50 text-[10px] leading-relaxed transition-all hover:border-emerald-500/40"><div class="text-zinc-600 mb-1">${i.pubDate.split(' ')[0]}</div><a href="${i.link}" target="_blank" class="hover:text-emerald-400 transition-colors">${i.title}</a></div>`).join('');
+            } catch(e) { console.error("News fetch error"); }
+        }
+
+        async function fetchYoutube() {
+            const player = document.getElementById('yt-player-container');
+            const list = document.getElementById('yt-list');
+            try {
+                const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://www.youtube.com/feeds/videos.xml?channel_id='+YT_CHANNEL_ID)}`);
+                const data = await res.json();
+                if(data.status==='ok' && data.items.length > 0) {
+                    const vidId = data.items[0].link.split('v=')[1];
+                    player.innerHTML = `<iframe width="100%" height="100%" src="https://www.youtube.com/embed/${vidId}" frameborder="0" allowfullscreen></iframe>`;
+                    list.innerHTML = data.items.slice(1, 4).map(item => `<div class="p-4 bg-zinc-900 border border-zinc-800 rounded-xl hover:border-emerald-500/50 cursor-pointer transition-all" onclick="updatePlayer('${item.link.split('v=')[1]}')"><h4 class="font-bold line-clamp-2">${item.title}</h4></div>`).join('');
+                }
+            } catch(e) { player.innerHTML = "影音抓取失敗，請確認 YouTube 連結。"; }
+        }
+
+        function updatePlayer(id) { document.getElementById('yt-player-container').innerHTML = `<iframe width="100%" height="100%" src="https://www.youtube.com/embed/${id}" frameborder="0" allowfullscreen></iframe>`; }
+        
+        function switchPage(p) { 
+            document.getElementById('page-stocks').classList.toggle('hidden', p !== 'stocks'); 
+            document.getElementById('page-youtube').classList.toggle('hidden', p !== 'youtube');
+            document.getElementById('stock-list-container').classList.toggle('hidden', p !== 'stocks');
+            document.getElementById('video-info-container').classList.toggle('hidden', p !== 'youtube');
+            document.getElementById('tab-stocks').classList.toggle('active', p === 'stocks');
+            document.getElementById('tab-youtube').classList.toggle('active', p === 'youtube');
+        }
+
+        window.onload = () => {
+            const ticker = document.createElement('script'); ticker.src = "https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js"; ticker.async = true;
+            ticker.innerHTML = JSON.stringify({ 
+                "symbols": [
+                    { "proName": "NASDAQ:NDX", "title": "Nasdaq 100" },
+                    { "proName": "NASDAQ:SOX", "title": "費半指數" },
+                    { "proName": "TVC:SPX", "title": "標普 500" },
+                    { "proName": "TVC:DXY", "title": "美元指數" },
+                    { "proName": "FX_IDC:USDTWD", "title": "美元/台幣" }
+                ], "colorTheme": "dark", "isTransparent": true, "displayMode": "adaptive", "locale": "zh_TW" 
+            });
+            document.getElementById('tv-ticker-widget').appendChild(ticker);
+            syncData(); fetchYoutube();
+        };
+    </script>
+</body>
+</html>

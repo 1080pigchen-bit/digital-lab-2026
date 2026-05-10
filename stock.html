@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chong Family Terminal | Debug Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #050505; color: #e4e4e7; font-family: 'Segoe UI', sans-serif; height: 100vh; overflow: hidden; }
+        .sidebar { background: #09090b; border-right: 1px solid #18181b; }
+        .stock-item { transition: 0.2s; border: 1px solid transparent; }
+        .stock-item.active { background: #10b98115; border-color: #10b98150; }
+        .score-bar { height: 4px; background: #1a1a1a; border-radius: 2px; overflow: hidden; width: 35px; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 10px; }
+    </style>
+</head>
+<body class="flex flex-col">
+
+    <div class="h-10 border-b border-zinc-800 bg-black" id="tv-ticker-widget"></div>
+
+    <div class="flex flex-1 overflow-hidden">
+        <aside class="sidebar w-80 flex flex-col h-full shadow-2xl">
+            <div class="p-6 border-b border-zinc-800">
+                <a href="index.html" class="text-[10px] text-zinc-500 font-bold tracking-widest mb-4 block">← BACK TO LAB</a>
+                <h1 class="text-xl font-black text-emerald-500 tracking-tighter uppercase leading-none">宜辰家庭<br>終端 v2.9</h1>
+                <div class="flex gap-4 mt-6">
+                    <div class="text-[10px] font-bold text-emerald-500 border-b-2 border-emerald-500 pb-1">MARKET TERMINAL</div>
+                </div>
+            </div>
+
+            <div id="stock-list-container" class="flex-1 overflow-y-auto">
+                <div id="category-list" class="p-4 space-y-6">
+                    <div class="p-6 text-emerald-500 text-xs italic animate-pulse">正在嘗試透過代理伺服器同步數據...</div>
+                </div>
+            </div>
+        </aside>
+
+        <main class="flex-1 flex flex-col bg-black overflow-hidden relative">
+            <div id="page-stocks" class="flex-1 flex flex-col overflow-y-auto">
+                <div class="w-full h-[450px] p-4">
+                    <div id="tv-overview-widget" class="w-full h-full rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950"></div>
+                </div>
+                <div class="px-6 py-4 grid grid-cols-1 md:grid-cols-3 gap-3" id="news-feed"></div>
+            </div>
+
+            <div class="p-8 border-t border-zinc-900 bg-zinc-950/50">
+                <div class="flex items-center gap-3 mb-2">
+                    <span class="px-2 py-0.5 bg-emerald-500 text-black text-[9px] font-black rounded uppercase">Family Guide</span>
+                    <h2 class="text-xl font-black text-white" id="desc-name">NVIDIA</h2>
+                    <span id="desc-emoji" class="text-2xl">🥳</span>
+                </div>
+                <p class="text-zinc-400 text-xs leading-relaxed" id="desc-content">請點擊標的查看說明。</p>
+            </div>
+        </main>
+    </div>
+
+    <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+    <script>
+        // --- 終極繞道網址 ---
+        const RAW_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT-0898ngmOYQTTIgoXmw7pk6z1jucOzNpT2N4jiO0FXh6SXIGyNTAc8iCG1Q3St0oCbsvkTXWxtU2R/pub?output=csv";
+        // 使用 AllOrigins 代理伺服器繞過 CORS 封鎖
+        const SHEET_CSV_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(RAW_CSV_URL + "&t=" + Date.now())}`;
+
+        async function syncData() {
+            try {
+                const response = await fetch(SHEET_CSV_URL);
+                const json = await response.json();
+                const csvText = json.contents;
+                
+                const rows = csvText.replace(/\r/g, "").split('\n').filter(r => r.trim() !== "");
+                const headers = rows[0].split(',').map(h => h.trim().toLowerCase());
+                
+                // 自動尋找欄位位置，不管你在 Sheet 裡怎麼插欄位都能抓到
+                const iTicker = headers.indexOf("ticker");
+                const iScore = headers.indexOf("yichenscore"); // 這是你在 Sheet 裡的標題
+                const iCat = headers.indexOf("category");
+
+                if (iTicker === -1 || iCat === -1) throw new Error("找不到必要的欄位標題");
+
+                const dataByCat = {};
+                rows.slice(1).forEach(row => {
+                    const cols = row.split(',');
+                    const cat = cols[iCat]?.trim();
+                    const fullTicker = cols[iTicker]?.trim();
+                    if (!cat || !fullTicker) return;
+                    
+                    const sym = fullTicker.includes(':') ? fullTicker.split(':')[1] : fullTicker;
+                    const score = parseFloat(cols[iScore]) || 0;
+                    
+                    if (!dataByCat[cat]) dataByCat[cat] = [];
+                    dataByCat[cat].push({ sym, score, fullTicker, grade: getGrade(score) });
+                });
+
+                renderList(dataByCat);
+            } catch (e) {
+                console.error(e);
+                document.getElementById('category-list').innerHTML = `<div class="p-6 text-red-500 text-[10px]">數據讀取失敗。<br><br>請直接將檔案【上傳至 GitHub】測試，或檢查 Google Sheet 第一列標題是否有：Ticker, YiChenScore, Category</div>`;
+            }
+        }
+
+        function getGrade(s) { return s >= 81 ? "🥳" : s >= 61 ? "😍" : s >= 41 ? "🙂" : s >= 21 ? "😐" : "🥶"; }
+
+        function renderList(dataByCat) {
+            const container = document.getElementById('category-list');
+            container.innerHTML = '';
+            for (let cat in dataByCat) {
+                const sorted = dataByCat[cat].sort((a,b) => b.score - a.score);
+                let div = document.createElement('div');
+                div.innerHTML = `<div class="px-4 py-2 text-[9px] font-black text-zinc-600 bg-zinc-900/50 border-y border-zinc-800/50 uppercase tracking-widest mb-2">${cat}</div>`;
+                let grid = document.createElement('div'); grid.className = "space-y-1";
+                sorted.forEach(item => {
+                    let btn = document.createElement('div');
+                    btn.className = `stock-item px-4 py-3 rounded-lg flex justify-between items-center cursor-pointer ${item.sym === currentSymbol ? 'active' : ''}`;
+                    btn.innerHTML = `<div class="flex items-center gap-2"><span class="text-xs font-bold font-mono text-zinc-300">${item.sym}</span><span>${item.grade}</span></div><span class="text-[9px] text-emerald-500 font-bold">${item.score}</span>`;
+                    btn.onclick = () => switchSymbol(item.sym, item.fullTicker, item.grade);
+                    grid.appendChild(btn);
+                });
+                div.appendChild(grid); container.appendChild(div);
+            }
+            if(Object.keys(dataByCat).length > 0) {
+                const first = Object.values(dataByCat)[0][0];
+                switchSymbol(first.sym, first.fullTicker, first.grade);
+            }
+        }
+
+        function switchSymbol(sym, fullTicker, grade) {
+            currentSymbol = sym;
+            document.querySelectorAll('.stock-item').forEach(el => el.classList.toggle('active', el.innerText.includes(sym)));
+            document.getElementById('desc-name').innerText = sym;
+            document.getElementById('desc-emoji').innerText = grade;
+            
+            document.getElementById('tv-overview-widget').innerHTML = "";
+            const s = document.createElement('script'); s.src = "https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js"; s.async=true;
+            s.innerHTML = JSON.stringify({ "symbols": [[`${fullTicker}|1D`]], "width": "100%", "height": "100%", "colorTheme": "dark", "lineColor": "#10b981", "autosize": true });
+            document.getElementById('tv-overview-widget').appendChild(s);
+        }
+
+        window.onload = () => {
+            const ticker = document.createElement('script'); ticker.src = "https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js"; ticker.async = true;
+            ticker.innerHTML = JSON.stringify({ "symbols": [{"proName": "NASDAQ:NDX", "title": "Nasdaq 100"}, {"proName": "PHLX:SOX", "title": "費半"}], "colorTheme": "dark", "isTransparent": true });
+            document.getElementById('tv-ticker-widget').appendChild(ticker);
+            syncData();
+        };
+    </script>
+</body>
+</html>
